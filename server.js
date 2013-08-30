@@ -1,4 +1,5 @@
 
+var jsonp = 'true';
 
 // Exception values
 var ERR_INVALID_REQUEST = -1;
@@ -10,9 +11,16 @@ var gUrl = require('url');
 var gDB = require('./simdb');
 
 
-
-
-
+function encapsulateCallback(data) {
+	if(jsonp) {
+		var callback = '_testcb(' + data + ')';
+		console.log('callback: ' + callback);
+	    return callback;
+	} else {
+		return data;
+	}
+	
+}
 
 //=============================================================================
 // Project Service Functions
@@ -69,8 +77,13 @@ function handleJobRequest( method, path, query, payload, res )
         result = gDB.jobQuery( query );
     }
 
+    console.log('RESULT: ' + result);
+    
+    var callback = encapsulateCallback(result);
+    
     res.writeHead(200);
-    res.write( result );
+    //res.write( result );
+    res.write(callback);
     res.end();
 }
 
