@@ -8,6 +8,7 @@ var ERR_INVALID_PROPERTY = -3;
 var gHttp = require('http');
 var gUrl = require('url');
 var gDB = require('./simdb');
+//var gDB = require('./mysqldb');
 
 
 
@@ -96,8 +97,30 @@ function handleFileRequest( method, path, query, payload, res )
 
 function handleUserRequest( method, path, query, payload, res )
 {
+    // API:
+    // GET host/users - get all users with query params
+    // GET host/users/username - get a user record
+
+    var result = "";
+
+    if ( method === "GET" )
+    {
+        if ( path.length === 2 )
+        {
+            result = gDB.userQuery( query );
+        }
+        else if ( path.length === 3 )
+        {
+            result = gDB.userGet( path[2], query );
+        }
+        else
+            throw ERR_INVALID_REQUEST;
+    }
+    else
+        throw ERR_INVALID_REQUEST;
+
     res.writeHead(200);
-    res.write('User API not implemented.');
+    res.write( result );
     res.end();
 }
 
