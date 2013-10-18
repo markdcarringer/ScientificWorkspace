@@ -18,7 +18,6 @@ app.get('/',function(req,res) {
 //users proxy service
 app.get('/users',function(request,response) {
   
-  console.log('params: ' + request.params.a);
   
   var options = {
     host: 'localhost',
@@ -60,14 +59,14 @@ app.get('/users',function(request,response) {
 
 
 //users proxy service
-app.get('/users/:a',function(request,response) {
+app.get('/users/:user_id',function(request,response) {
   
-  console.log('params: ' + request.params.a);
+  console.log('params: ' + request.params.user_id);
   
   var options = {
     host: 'localhost',
     port: servicePort,
-    path: '/users/'+request.params.a,
+    path: '/users/'+request.params.user_id,
     method: 'GET'
   };
   
@@ -101,8 +100,156 @@ app.get('/users/:a',function(request,response) {
   req.write('data\n');
   req.end();
   
-  
-  //response.send('here');
+ 
+});
+
+//jobs proxy service
+app.get('/jobs',function(request,response) {
+  var options = {
+	host: 'localhost',
+	port: servicePort,
+	path: '/jobs',
+	method: 'GET'
+  };
+	  
+  var responseData = '';
+	  
+  var req = http.request(options, function(res) {
+    console.log('STATUS: ' + res.statusCode);
+	res.setEncoding('utf8');
+	res.on('data', function (chunk) {
+	  responseData += chunk;	
+    });
+	     
+    res.on("end", function () {
+    // you can use res.send instead of console.log to output via express
+      response.send(responseData);
+    }); 
+	     
+	      
+  });
+	  
+  req.on('error', function(e) {
+    console.log('problem with request: ' + e.message);
+  });
+	  
+  // write data to request body
+  req.write('data\n');
+  req.write('data\n');
+  req.end();
+});
+
+
+//jobs proxy service
+app.get('/jobs/:job_id',function(request,response) {
+  console.log('params: ' + request.params.job_id);
+	  
+  var options = {
+    host: 'localhost',
+	port: servicePort,
+	path: '/users/'+request.params.job_id,
+	method: 'GET'
+  };
+	  
+  var responseData = '';
+	  
+  var req = http.request(options, function(res) {
+    console.log('STATUS: ' + res.statusCode);
+	res.setEncoding('utf8');
+	res.on('data', function (chunk) {
+	  responseData += chunk;	
+    });
+	     
+    res.on("end", function () {
+    // you can use res.send instead of console.log to output via express
+      response.send(responseData);
+    }); 
+	     
+	      
+  });
+	  
+  req.on('error', function(e) {
+    console.log('problem with request: ' + e.message);
+  });
+	  
+  // write data to request body
+  req.write('data\n');
+  req.write('data\n');
+  req.end();
+});
+
+
+//directories proxy service
+app.get('/directories',function(request,response) {
+  var options = {
+	host: 'localhost',
+	port: servicePort,
+	path: '/directories',
+	method: 'GET'
+  };
+	  
+  var responseData = '';
+	  
+  var req = http.request(options, function(res) {
+    console.log('STATUS: ' + res.statusCode);
+	res.setEncoding('utf8');
+	res.on('data', function (chunk) {
+	  responseData += chunk;	
+    });
+	     
+    res.on("end", function () {
+    // you can use res.send instead of console.log to output via express
+      response.send(responseData);
+    }); 
+	     
+	      
+  });
+	  
+  req.on('error', function(e) {
+    console.log('problem with request: ' + e.message);
+  });
+	  
+  // write data to request body
+  req.write('data\n');
+  req.write('data\n');
+  req.end();
+});
+
+
+//jobs proxy service
+app.get('/files',function(request,response) {
+  var options = {
+	host: 'localhost',
+	port: servicePort,
+	path: '/files',
+	method: 'GET'
+  };
+	  
+  var responseData = '';
+	  
+  var req = http.request(options, function(res) {
+    console.log('STATUS: ' + res.statusCode);
+	res.setEncoding('utf8');
+	res.on('data', function (chunk) {
+	  responseData += chunk;	
+    });
+	     
+    res.on("end", function () {
+    // you can use res.send instead of console.log to output via express
+      response.send(responseData);
+    }); 
+	     
+	      
+  });
+	  
+  req.on('error', function(e) {
+    console.log('problem with request: ' + e.message);
+  });
+	  
+  // write data to request body
+  req.write('data\n');
+  req.write('data\n');
+  req.end();
 });
 
 
