@@ -123,7 +123,8 @@ app.get('/jobs',function(request,response) {
 	     
     res.on("end", function () {
     // you can use res.send instead of console.log to output via express
-      response.send(responseData);
+    	var jsonObj = JSON.parse(responseData);
+        response.send(jsonObj);
     }); 
 	     
 	      
@@ -162,7 +163,8 @@ app.get('/jobs/:job_id',function(request,response) {
 	     
     res.on("end", function () {
     // you can use res.send instead of console.log to output via express
-      response.send(responseData);
+    	var jsonObj = JSON.parse(responseData);
+        response.send(jsonObj);
     }); 
 	     
 	      
@@ -236,7 +238,8 @@ app.get('/files',function(request,response) {
 	     
     res.on("end", function () {
     // you can use res.send instead of console.log to output via express
-      response.send(responseData);
+    	var jsonObj = JSON.parse(responseData);
+        response.send(jsonObj);
     }); 
 	     
 	      
