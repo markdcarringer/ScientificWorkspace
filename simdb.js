@@ -1,5 +1,7 @@
 module.exports =
 {
+    //===== USERS API =========================================================
+
     userGet : function ( a_username, query )
     {
         if ( a_username in gUsersByName )
@@ -52,6 +54,123 @@ module.exports =
         return JSON.stringify( wrapper, null, 2 );
     },
 
+    //===== JOBS API ==========================================================
+
+    jobGet : function ( a_job_id, query )
+    {
+        // gJobData is organized by job_id, so a_job_id is the index
+        if ( a_job_id in gJobData )
+        {
+            var fields = parseFields( query );
+            if ( fields.length > 0 )
+            {
+                var record = {};
+                for ( var fidx in fields )
+                    record[fields[fidx]] = gJobData[a_job_id][fields[fidx]];
+
+                return JSON.stringify( record, null, 2 );
+            }
+            else
+            {
+                return JSON.stringify( gJobData[a_job_id], null, 2 );
+            }
+        }
+        else throw ERR_INVALID_OBJECT;
+    },
+
+    jobQuery : function ( query )
+    {
+        var from;
+        var to;
+
+        if ( query.from !== undefined )
+            from = new Date(query.from);
+        if ( query.to !== undefined )
+            to = new Date(query.to);
+
+        var jobs = [];
+
+        /*
+        var job_list = [];
+
+        if ( query.tags )
+        {
+            // Tags is a comma-sep list of domain:tag
+            var tag_list = query.tags.split(",");
+            for ( var t in tag_list )
+            {
+                var parts = tag_list[t].split(":");
+                if ( parts[0] && parts[1] )
+                {
+                    //console.log( parts[0] + ":" + parts[1] );
+                    if ( parts[0] in gTagDefs )
+                    {
+                        if ( parts[1] in gTagDefs[parts[0]] )
+                        {
+                            var objects = gTagDefs[parts[0]][parts[1]].objects;
+                            for ( var obj in objects )
+                            {
+                                if ( !(objects[obj] in job_list ))
+                                {
+                                    job_list.push( objects[obj] );
+                                }
+                            }
+                        }
+                    }
+                }
+                else if ( parts[0] )
+                {
+                    //console.log( parts[0] );
+                    // What to do here?
+                }
+            }
+        }
+        else
+        {
+            job_list = gJobData;
+        }
+        */
+
+        var fields = parseFields( query );
+
+        for ( var i = 0; i < gJobData.length; i++ )
+        {
+            if ( query.user_id !== undefined && gJobData[i].user_id != query.user_id )
+                continue;
+            if ( query.job_id !== undefined && gJobData[i].job_id != query.job_id )
+                continue;
+            if ( query.project !== undefined && gJobData[i].project != query.project )
+                continue;
+            if ( from !== undefined && gJobData[i].start_date < from )
+                continue;
+            if ( to !== undefined && gJobData[i].start_date > to )
+                continue;
+
+            // Made it here, so this entry is a result
+
+            if ( fields.length > 0 )
+            {
+                var record = {};
+
+                for ( var fidx in fields )
+                    record[fields[fidx]] = gJobData[i][fields[fidx]];
+
+                jobs.push( record );
+            }
+            else
+            {
+                jobs.push( gJobData[i] );
+            }
+
+        }
+
+        var wrapper = { jobs: jobs };
+        var result = JSON.stringify( wrapper, null, 2 );
+
+        return result;
+    },
+
+    /*
     domainDefined : function( domain )
     {
         if ( domain in gTagDefs )
@@ -147,88 +266,6 @@ module.exports =
         return JSON.stringify( wrapper, null, 2 );
     },
 
-    jobGet : function ( a_job )
-    {
-        if ( a_job in gJobData )
-        {
-            return JSON.stringify( gJobData[a_job], null, 2 );
-        }
-        else throw ERR_INVALID_OBJECT;
-    },
-
-    jobQuery : function ( query )
-    {
-        var from;
-        var to;
-
-        if ( query.from !== undefined )
-            from = new Date(query.from);
-        if ( query.to !== undefined )
-            to = new Date(query.to);
-
-        var jobs = [];
-
-        var job_list = [];
-
-        if ( query.tags )
-        {
-            // Tags is a comma-sep list of domain:tag
-            var tag_list = query.tags.split(",");
-            for ( var t in tag_list )
-            {
-                var parts = tag_list[t].split(":");
-                if ( parts[0] && parts[1] )
-                {
-                    //console.log( parts[0] + ":" + parts[1] );
-                    if ( parts[0] in gTagDefs )
-                    {
-                        if ( parts[1] in gTagDefs[parts[0]] )
-                        {
-                            var objects = gTagDefs[parts[0]][parts[1]].objects;
-                            for ( var obj in objects )
-                            {
-                                if ( !(objects[obj] in job_list ))
-                                {
-                                    job_list.push( objects[obj] );
-                                }
-                            }
-                        }
-                    }
-                }
-                else if ( parts[0] )
-                {
-                    //console.log( parts[0] );
-                    // What to do here?
-                }
-            }
-        }
-        else
-        {
-            job_list = gJobData;
-        }
-
-        for ( var i = 0; i < job_list.length; i++ )
-        {
-            if ( query.user !== undefined && job_list[i].user != query.user )
-                continue;
-            if ( query.job !== undefined && job_list[i].job != query.job )
-                continue;
-            if ( query.project !== undefined && job_list[i].project != query.project )
-                continue;
-            if ( from !== undefined && job_list[i].start_date < from )
-                continue;
-            if ( to !== undefined && job_list[i].start_date > to )
-                continue;
-
-            // Made it here, so this entry is a result
-            jobs.push( job_list[i].job );
-        }
-
-        var wrapper = { jobs: jobs };
-        var result = JSON.stringify( wrapper, null, 2 );
-
-        return result;
-    },
 
     jobAddTag : function( a_job, a_domain, a_tag )
     {
@@ -266,13 +303,14 @@ module.exports =
         }
         else throw ERR_INVALID_OBJECT;
     }
+    */
 
 };
 
-function UserInfo(user,uid,project,firstname,lastname,email,phone)
+function UserInfo(user_name,user_id,project,firstname,lastname,email,phone)
 {
-    this.user       = user;
-    this.uid        = uid;
+    this.user_name  = user_name;
+    this.user_id    = user_id;
     this.project    = project;
     this.firstname  = firstname;
     this.lastname   = lastname;
@@ -280,10 +318,10 @@ function UserInfo(user,uid,project,firstname,lastname,email,phone)
     this.phone      = phone;
 }
 
-function JobInfo(user,job,project,start_date,node_count,cmd)
+function JobInfo(user_id,job_id,project,start_date,node_count,cmd)
 {
-    this.user       = user;
-    this.job        = job;
+    this.user_id    = user_id;
+    this.job_id     = job_id;
     this.project    = project;
     this.start_date = start_date;
     this.node_count = node_count;
@@ -341,15 +379,15 @@ var gJobData = [];
 var gTagDefs = {};
 
 // Init fake job data...
-gJobData.push( new JobInfo("u1",0,"ABC001",new Date("1-1-2013 1:00:00"),10,"a.out"));
-gJobData.push( new JobInfo("u2",1,"ABC001",new Date("3-2-2013 7:00:00"),15,"go"));
-gJobData.push( new JobInfo("u1",2,"ABC001",new Date("3-5-2013 3:00:00"),20,"go1"));
-gJobData.push( new JobInfo("u2",3,"ABC001",new Date("5-2-2013 4:00:00"),100,"go2"));
-gJobData.push( new JobInfo("u3",4,"XYZ001",new Date("5-5-2013 10:00:00"),1,"a.out"));
-gJobData.push( new JobInfo("u2",5,"XYZ001",new Date("6-1-2013 4:00:00"),10,"xyz"));
-gJobData.push( new JobInfo("u1",6,"XYZ001",new Date("6-10-2013 2:00:00"),1000,"sim -z 123"));
-gJobData.push( new JobInfo("u3",7,"XYZ001",new Date("8-1-2013 8:00:00"),200,"go3"));
-gJobData.push( new JobInfo("u3",8,"XYZ001",new Date("8-9-2013 10:00:00"),100,"a.out"));
+gJobData.push( new JobInfo(1,0,"ABC001",new Date("1-1-2013 1:00:00"),10,"a.out"));
+gJobData.push( new JobInfo(2,1,"ABC001",new Date("3-2-2013 7:00:00"),15,"go"));
+gJobData.push( new JobInfo(1,2,"ABC001",new Date("3-5-2013 3:00:00"),20,"go1"));
+gJobData.push( new JobInfo(2,3,"ABC001",new Date("5-2-2013 4:00:00"),100,"go2"));
+gJobData.push( new JobInfo(3,4,"XYZ001",new Date("5-5-2013 10:00:00"),1,"a.out"));
+gJobData.push( new JobInfo(3,5,"XYZ001",new Date("6-1-2013 4:00:00"),10,"xyz"));
+gJobData.push( new JobInfo(4,6,"XYZ001",new Date("6-10-2013 2:00:00"),1000,"sim -z 123"));
+gJobData.push( new JobInfo(4,7,"XYZ001",new Date("8-1-2013 8:00:00"),200,"go3"));
+gJobData.push( new JobInfo(5,8,"XYZ001",new Date("8-9-2013 10:00:00"),100,"a.out"));
 
 // Init fake user data...
 gUserData.push( new UserInfo("j1s",1,"ABC001","Joe","Smith","jsmith@ornl.gov","865-555-1111"));

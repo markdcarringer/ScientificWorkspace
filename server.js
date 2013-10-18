@@ -9,89 +9,11 @@ var gHttp = require('http');
 var gUrl = require('url');
 var gDB = require('./simdb');
 //var gDB = require('./mysqldb');
-
-
-
-
+//var gDB = require('./cassandradb');
 
 
 //=============================================================================
-// Project Service Functions
-
-function handleProjectRequest( method, path, query, payload, res )
-{
-    res.writeHead(200);
-    res.write('Project API not implemented.');
-    res.end();
-}
-
-
-
-// Handle job service requests
-function handleJobRequest( method, path, query, payload, res )
-{
-    // API:
-    // GET host/jobs - all josb with query params
-    // GET host/jobs/job - job record
-    // PUT host/jobs/job/domain/tag
-    // DELETE host/jobs/job/domain/tag
-
-    var result = "";
-
-    if ( path[2] )
-    {
-        // Do something with a particular job
-
-        if ( method === "GET" )
-        {
-            // GET host/jobs/job_id
-            // Return full job record
-            result = gDB.jobGet( path[2] );
-        }
-        else if ( method === "PUT" && path[3] && path[4] )
-        {
-
-            gDB.jobAddTag( path[2], path[3], path[4] ); // Throws if something goes wrong
-        }
-        else if ( method === "DELETE" && path[3] && path[4] )
-        {
-            // DELETE only work for tags property, path[3] = domain, path[4] = tag to delete
-
-            gDB.jobRemoveTag( path[2], path[3], path[4] ); // Throws if something goes wrong
-        }
-
-        else throw ERR_INVALID_REQUEST;
-    }
-    else
-    {
-        if ( method !== "GET" )
-            throw ERR_INVALID_REQUEST;
-
-        result = gDB.jobQuery( query );
-    }
-
-    res.writeHead(200);
-    res.write( result );
-    res.end();
-}
-
-//=============================================================================
-// FILE Service Functions
-
-/* Provides directory and file listing API */
-
-function handleFileRequest( method, path, query, payload, res )
-{
-    // API:
-    // GET host/files
-
-    res.writeHead(200);
-    res.write('File API not implemented.');
-    res.end();
-}
-
-//=============================================================================
-// USER Service Functions
+// USERS Service Functions
 
 /* Provides access control API */
 
@@ -124,18 +46,54 @@ function handleUserRequest( method, path, query, payload, res )
     res.end();
 }
 
+
 //=============================================================================
-// DOMAIN Service Functions
+// JOBS Service Functions
 
-/* The DOMAIN API supports the creation, listing, and deletion of domains.
-Domains are simply containers for tags. */
-
-function handleDomainRequest( method, path, query, payload, res )
+// Handle job service requests
+function handleJobRequest( method, path, query, payload, res )
 {
     // API:
-    // GET host/domains - all domains
-    // PUT host/domains/domain - defines domain from payload
-    // DELETE host/domains/domain - remove domain
+    // GET host/jobs - all josb with query params
+    // GET host/jobs/job_id - job record
+
+    var result = "";
+
+    if ( method === "GET" )
+    {
+        if ( path.length === 3 )
+        {
+            // GET host/jobs/job_id
+            // Return job record with specified fields
+
+            result = gDB.jobGet( path[2], query );
+        }
+        else if ( path.length === 2 )
+        {
+            // GET host/jobs
+            // Return list of jobs with specified fields
+
+            result = gDB.jobQuery( query );
+        }
+        else throw ERR_INVALID_REQUEST;
+    }
+    else throw ERR_INVALID_REQUEST;
+
+    res.writeHead(200);
+    res.write( result );
+    res.end();
+}
+
+
+//=============================================================================
+// FILES and DIRECTORIES Service Functions
+
+/* Provides directory listing API */
+
+function handleDirectoryRequest( method, path, query, payload, res )
+{
+    // API:
+    // GET host/directories
 
     var result = "";
 
@@ -143,33 +101,51 @@ function handleDomainRequest( method, path, query, payload, res )
     {
         if ( path.length === 2 )
         {
-            result = gDB.domainGet();
+            result = gDB.directoriesGet( query );
         }
         else
             throw ERR_INVALID_REQUEST;
     }
-    else if ( method === "PUT" )
-    {
-        if ( path.length !== 3 )
-            throw ERR_INVALID_REQUEST;
-
-        gDB.domainDefine( path[2] );
-    }
-    else if ( method === "DELETE" )
-    {
-        if ( path.length !== 3 )
-            throw ERR_INVALID_REQUEST;
-
-        gDB.domainUndefine( path[2] );
-    }
+    else
+        throw ERR_INVALID_REQUEST;
 
     res.writeHead(200);
     res.write( result );
     res.end();
 }
 
+
+/* Provides file listing API */
+
+function handleFileRequest( method, path, query, payload, res )
+{
+    // API:
+    // GET host/files
+
+    var result = "";
+
+    if ( method === "GET" )
+    {
+        if ( path.length === 2 )
+        {
+            result = gDB.filesGet( query );
+        }
+        else
+            throw ERR_INVALID_REQUEST;
+    }
+    else
+        throw ERR_INVALID_REQUEST;
+
+    res.writeHead(200);
+    res.write( result );
+    res.end();
+}
+
+
+
 //=============================================================================
 // TAGS Service Functions
+
 
 /* The TAG API is to support the administration (CRUD) of tags. This API is NOT
 used for tagging data entities - that service is provided on the respective
@@ -182,6 +158,7 @@ API. If a domain is deleted, all tags associated with that domain are also
 deleted.
 */
 
+/*
 function handleTagRequest( method, path, query, payload, res )
 {
     // API:
@@ -227,7 +204,7 @@ function handleTagRequest( method, path, query, payload, res )
     res.write( result );
     res.end();
 }
-
+*/
 
 //=============================================================================
 //=============================================================================
@@ -242,24 +219,21 @@ console.log( method ); console.log( path.length ); console.log( path );
     {
         switch ( path[1] )
         {
-        case "projects":
-            handleProjectRequest( method, path, query, payload, res );
+        case "users":
+            handleUserRequest( method, path, query, payload, res );
             break;
         case "jobs":
             handleJobRequest( method, path, query, payload, res );
             break;
+        case "directories":
+            handleDirectoryRequest( method, path, query, payload, res );
+            break;
         case "files":
             handleFileRequest( method, path, query, payload, res );
             break;
-        case "users":
-            handleUserRequest( method, path, query, payload, res );
-            break;
-        case "domains":
-            handleDomainRequest( method, path, query, payload, res );
-            break;
-        case "tags":
-            handleTagRequest( method, path, query, payload, res );
-            break;
+        //case "tags":
+        //    handleTagRequest( method, path, query, payload, res );
+        //    break;
         default:
             throw ERR_INVALID_REQUEST;
         }
