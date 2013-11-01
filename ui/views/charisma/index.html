@@ -235,7 +235,7 @@
 								<!-- <h3>Default </h3> --><!-- <small>a fully featued template</small></h3>  -->
 								<p >Your tags</p> 
 								<span class="label tag_read_event" style="margin-right:5px">Tag1</span>
-								<span class="label tag_read_event" style="margin-right:5px">Tag2</span>
+								<span class="label tag_read_event" style="margin-right:5px">Taggg2</span>
 								<hr>
 								<div>
 								<span id="tag_info"></span>
@@ -688,14 +688,25 @@
 		});
 		
 
-
+		console.log('in client side /jobs');
+		
+		var user_id = 'j1s';
+		
+		jQuery.ajax({
+			url: 'http://localhost:3000/jobs?user_id=' + user_id,
+			type: 'GET',		
+			success: function(data) {
+				getJobNodes(data);
+			},
+			error: function() {
+				alert('error');
+			}
+		})
+		
+		
 		
 		
 		/*
-		
-		getJobNodes();
-		
-		
 		
 		$('.add_file_tag').click(function() {
 			$('div#added_tags').show();
@@ -720,7 +731,7 @@
 		
 		
 		*/
-		
+
 		
 	});
 	
@@ -729,7 +740,8 @@
 		//when the page loads get all the user spaces and put in a tree
 		//run the ajax here
 		var projectNames = data['project'];
-		alert(projectNames);
+		
+		//alert(projectNames);
 		var projects = new Array();
 		projects.push(projectNames);
 		
@@ -740,7 +752,9 @@
 		//var arrFolder2 = {"title" : "Scratch" , isFolder : true};
 		arr.push(arrFolder1);
 		//arr.push(arrFolder2);
+		
 		for(var proj in projects) {
+			console.log('projs: ' + projects[proj]);
 			var arrFolder = {"title" : projects[proj], isFolder : true};
 			arr.push(arrFolder);
 		}
@@ -749,6 +763,61 @@
 		var nodes = {"title" : "Lustre", isFolder : true, "children" : arr};
 		
 		$(userSpaceTreeStr).dynatree({
+            onActivate: function(node) {
+            	
+            	// A DynaTreeNode object is passed to the activation handler
+                // Note: we also get this event, if persistence is on, and the page is reloaded.
+            	//clear the tag content
+            	
+            	highlightedFile = node.data.title;
+            	
+		
+        		$('.highlighted_file').empty();
+        		
+                //add the title
+                $('.highlighted_file').append( node.data.title);
+        		
+                console.log('title: ' + node.data.title);
+                
+        		//add the tags
+        		//ajax call to load existing tags
+        		if(highlightedJob != null) {
+        			$('.associate').show();
+        			$('#association').removeAttr("disabled");
+        		}
+        		
+            },
+            persist: true,
+            children: nodes
+            	
+        });
+	}
+
+	
+	function getJobNodes(data) {
+		//when the page loads get all the jobs and put in a tree
+		
+		//alert('getJobNodes');
+		
+		var user_id = data['jobs'][0]['user_id'];
+		
+		//console.log('jobs: ' + user_id);
+    	
+		var jobsArr = new Array();
+		
+		var jobIds = data['jobs'];
+		
+		
+		for(var i=0;i<jobIds.length;i++) {
+			console.log('jobid: ' + jobIds[i]['job_id']);
+			jobsArr.push(jobIds[i]['job_id']);
+		}
+		
+		var jobTreeStr = '#job_tree';//_'+indx;
+ 		
+		var nodes = {"title" : 'Jobs for ' + user_id, isFolder : true, "children" : jobsArr};
+		
+		$(jobTreeStr).dynatree({
             onActivate: function(node) {
             	// A DynaTreeNode object is passed to the activation handler
                 // Note: we also get this event, if persistence is on, and the page is reloaded.
@@ -772,82 +841,10 @@
             children: nodes
             	
         });
-	}
-
-	/*
-	function getJobNodes() {
-		//when the page loads get all the jobs and put in a tree
-		jQuery.ajax({
-	    	url: 'http://localhost:8080/jobs?callback=_testcb', // ?callback=?
-	    	type: 'GET',
-	    	dataType: "jsonp",
-	        jsonpCallback: "_testcb",
-	        cache: false,
-	        timeout: 5000,
-	   	    success: function(data) {  
-	   		  
-	   		  for(var key in data) {
-	   			  //alert('key: ' + key);
-	   			  var jobsArr = new Array();
-	   			  if(key == 'jobs') {
-	   				  var arr = data[key];
-	   				  for(var i=0;i<arr.length;i++) {
-	   					  
-	   					  var arrItem = {'title':arr[i]};
-	   					  jobsArr.push(arrItem);
-	   				  }
-	   			  }
-	   		    }
-	   		  
-	   		    //alert('jobsArr: ' + jobsArr);
-	   		    nodes = { "title" : "Jobs" , isFolder: true,
-	   		    		  "children" : jobsArr}; 
-	     		//alert('nodes: ' + nodes);
-	     		var jobTreeStr = '#job_tree';//_'+indx;
-	     		
-	     		
-	            $(jobTreeStr).dynatree({
-	                onActivate: function(node) {
-	                    // A DynaTreeNode object is passed to the activation handler
-	                    // Note: we also get this event, if persistence is on, and the page is reloaded.
-	                	//clear the tag content
-	                	
-		            	highlightedJob = node.data.title;
-	            
-	            		$('.highlighted_job').empty();
-	            		
-	                    //add the title
-	                    $('.highlighted_job').append( node.data.title);
-	            		
-	            		//add the tags
-	            		//ajax call to load existing tags
-	            		if(highlightedFile != null) {
-	            			$('.associate').show();
-	            			$('#association').removeAttr("disabled");
-        					
-        				}
-	            		
-	                },
-	                persist: true,
-	                children: nodes
-	                	
-	            });
-	     		
-	   		  
-	   	      },
-	    	  error:  function(jqXHR, textStatus, errorThrown) {
-	    		  console.log(textStatus, errorThrown);
-	    		  alert('text: ' + errorThrown);
-	    		}
-	      
-		    });//end jquery ajax
-	  	
+		
 	}
 	
-    function _testcb() {
-    	//alert('in callback');
-    }
-    )*/
+ 
 	
 	
 	</script>
