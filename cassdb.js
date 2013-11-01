@@ -186,8 +186,6 @@ module.exports =
         var where_clause = parseWhereClause( query );
         var columns = parseColumns( query );
 
-console.log( where_clause );
-
         pool.cql( "select " + columns + " from jobs" + where_clause, [], function( err, results )
         {
             if ( err )
@@ -210,6 +208,77 @@ console.log( where_clause );
                 });
 
                 sendReply( reply, { jobs: jobs } );
+            }
+        });
+    },
+
+    //===== APPS API ==========================================================
+
+    appQuery : function ( reply, query )
+    {
+        // Enforce required query parameter(s)
+        if ( query.jobid === undefined )
+           throw ERR_MISSING_REQUIRE_PARAM;
+
+        var where_clause = parseWhereClause( query );
+        var columns = parseColumns( query );
+
+        pool.cql( "select " + columns + " from apps" + where_clause, [], function( err, results )
+        {
+            if ( err )
+            {
+                sendError( reply, err );
+            }
+            else
+            {
+                var apps = [];
+
+                results.forEach( function( row )
+                {
+                    var record = {};
+                    row.forEach( function( name, value, ts, ttl )
+                    {
+                        record[name] = value;
+                    });
+
+                    apps.push( record );
+                });
+
+                sendReply( reply, { apps: apps } );
+            }
+        });
+    },
+
+    appGet : function ( reply, a_appid, query )
+    {
+        // Enforce required query parameter(s)
+        if ( query.jobid === undefined )
+           throw ERR_MISSING_REQUIRE_PARAM;
+
+        var columns = parseColumns( query );
+
+        pool.cql( "select " + columns + " from apps where appid = " + a_appid + " and jobid = " + query.jobid + " allow filtering", [], function( err, results )
+        {
+            if ( err )
+            {
+                sendError( reply, err );
+            }
+            else
+            {
+                var apps = [];
+
+                results.forEach( function( row )
+                {
+                    var record = {};
+                    row.forEach( function( name, value, ts, ttl )
+                    {
+                        record[name] = value;
+                    });
+
+                    apps.push( record );
+                });
+
+                sendReply( reply, { apps: apps } );
             }
         });
     },
