@@ -704,6 +704,17 @@
 		})
 		
 		
+		jQuery.ajax({
+			url: 'http://localhost:3000/apps?user_id=' + user_id,
+			type: 'GET',		
+			success: function(data) {
+				//getJobNodes(data);
+			},
+			error: function() {
+				alert('error in getting apps');
+			}
+		})
+		
 		
 		
 		/*
