@@ -285,16 +285,192 @@ module.exports =
 
     //===== DIRECTORY and FILES API ===========================================
 
-    directoriesGet : function ( reply, query )
-    {
-        sendError( reply, "API Not Implemented" );
-    },
-
     filesGet : function ( reply, query )
     {
-        sendError( reply, "API Not Implemented" );
+        // Enforce required query parameter(s)
+        if ( query.path === undefined || query.gid === undefined )
+            throw ERR_MISSING_REQUIRE_PARAM;
+
+        var max_depth = 1;
+        if ( query.depth !== undefined )
+            max_depth = query.depth;
+
+        // Build GIF object for in-memory filtering of results
+        // Must convert the string values to integer values for subsequent comparison to row values
+        var tmp = query.gid.split(',');
+        var gids = [];
+        for ( var i = 0; i < tmp.length; ++i )
+        {
+            gids.push( parseInt( tmp[i] ));
+        }
+
+//console.log( "MD: " + max_depth );
+
+        // Find starting point using provided path
+        pool.cql( "select * from spiderfs where namespace = '" + query.path + "'", [], function( err, results )
+        {
+            if ( err )
+            {
+                sendError( reply, err );
+            }
+            else
+            {
+                var data = [];
+                var metadata = [];
+
+                if ( results.length > 0 )
+                {
+                    var ns;
+                    var p;
+                    var name = "";
+
+                    results.forEach( function( row )
+                    {
+                        //console.log( "[" + row.get('gid').value + "] in [" + gids + "] ?" );
+                        // For now, filter gid on server side (cassandra doesn't allow OR in where clause)
+                        if ( gids.indexOf( row.get('gid').value ) > -1 )
+                        {
+                            //console.log("yes");
+                            ns = row.get('namespace').value;
+                            p = ns.lastIndexOf("|");
+                            if ( p < 0 )
+                                name = ns;
+                            else
+                                name = ns.substr( p + 1 );
+
+                            data.push( new FileData( name, row.get('uid').value, row.get('gid').value, row.get('filecount').value, row.get('ntype').value ));
+                            metadata.push( new FileMetadata( row.get('id').value, row.get('pid').value, 0 ));
+                        }
+                        //else
+                        //    console.log("no");
+
+                    });
+
+                }
+
+                if ( data.length > 0 )
+                    processFileRows( reply, query, data, metadata, gids, max_depth );
+                else
+                    sendReply( reply, {} );
+            }
+        });
     }
 };
+
+
+function FileData( name, uid, gid, filecount, isfile )
+{
+    this.name       = name;
+    this.uid        = uid;
+    this.gid        = gid;
+    this.filecount  = filecount;
+    this.isfile     = isfile;
+}
+
+
+function FileMetadata( id, pid, depth )
+{
+    this.id         = id;
+    this.pid        = pid;
+    this.depth      = depth;
+    this.processed  = 0;
+}
+
+function processFileRows( reply, query, data, metadata, gids, max_depth )
+{
+    var index = -1;
+
+    // Find next entry that needs to be followed
+    for ( var i = 0; i < metadata.length; ++i )
+    {
+//console.log( "  idx: " + i + ", proc: " + metadata[i].processed );
+        if ( metadata[i].processed === 0 )
+        {
+            if ( metadata[i].depth < max_depth ) // AND it's a directory (can't tell yet)
+            {
+                index = i;
+                break;
+            }
+            else
+            {
+//console.log( "  skip, depth: " + metadata[i].depth );
+                metadata[i].processed = 1;
+            }
+        }
+    }
+
+//console.log("MD Len: " + metadata.length + ", index: " + index );
+
+    if ( index < 0 )
+    {
+        // All rows have been processed, send results
+
+        buildFileObject( data[0], 0, data, metadata );
+
+        sendReply( reply, data[0] );
+    }
+    else
+    {
+        var cur_row = metadata[index];
+
+        cur_row.processed = 1;
+
+//console.log("ID: " + cur_row.id );
+
+        // Query db for next directory
+        pool.cql( "select * from spiderfs where pid = " + cur_row.id, [], function( err, results )
+        {
+            if ( err )
+            {
+                sendError( reply, err );
+            }
+            else
+            {
+                var ns;
+                var p;
+                var name = "";
+
+                results.forEach( function( row )
+                {
+                    if ( gids.indexOf( row.get('gid').value ) > -1 )
+                    {
+                        ns = row.get('namespace').value;
+                        p = ns.lastIndexOf("|");
+                        if ( p < 0 )
+                            name = ns;
+                        else
+                            name = ns.substr( p + 1 );
+
+                        data.push( new FileData( name, row.get('uid').value, row.get('gid').value, row.get('filecount').value, row.get('ntype').value ));
+                        metadata.push( new FileMetadata( row.get('id').value, row.get('pid').value, cur_row.depth + 1 ));
+                    }
+                });
+
+                // Find next row to process
+
+                processFileRows( reply, query, data, metadata, gids, max_depth );
+            }
+        });
+    }
+}
+
+
+function buildFileObject( object, obj_idx, data, metadata )
+{
+    var md = metadata[obj_idx];
+
+    for ( var i = 0; i < metadata.length; ++i )
+    {
+        if ( metadata[i].pid === md.id )
+        {
+            if ( object.files === undefined )
+                object.files = [];
+
+            buildFileObject( data[i], i, data, metadata );
+            object.files.push( data[i] );
+        }
+    }
+}
 
 
 function parseColumns( query )
