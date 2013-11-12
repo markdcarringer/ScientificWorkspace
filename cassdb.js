@@ -295,16 +295,25 @@ module.exports =
         if ( query.depth !== undefined )
             max_depth = query.depth;
 
+        var hidefiles = false;
+        if ( query.hidefiles === "true" || query.hidefiles === "1" )
+            hidefiles = true;
+
         // Build GIF object for in-memory filtering of results
         // Must convert the string values to integer values for subsequent comparison to row values
         var tmp = query.gid.split(',');
         var gids = [];
         for ( var i = 0; i < tmp.length; ++i )
-        {
             gids.push( parseInt( tmp[i] ));
-        }
 
-//console.log( "MD: " + max_depth );
+        // Built extra fields to return from file system table
+        var extras = [];
+        if ( query.retrieve !== undefined )
+        {
+            tmp = query.retrieve.split(',');
+            for ( var i = 0; i < tmp.length; ++i )
+                extras.push( tmp[i] );
+        }
 
         // Find starting point using provided path
         pool.cql( "select * from spiderfs where namespace = '" + query.path + "'", [], function( err, results )
@@ -319,53 +328,16 @@ module.exports =
                 var metadata = [];
 
                 if ( results.length > 0 )
-                {
-                    var ns;
-                    var p;
-                    var name = "";
-
-                    results.forEach( function( row )
-                    {
-                        //console.log( "[" + row.get('gid').value + "] in [" + gids + "] ?" );
-                        // For now, filter gid on server side (cassandra doesn't allow OR in where clause)
-                        if ( gids.indexOf( row.get('gid').value ) > -1 )
-                        {
-                            //console.log("yes");
-                            ns = row.get('namespace').value;
-                            p = ns.lastIndexOf("|");
-                            if ( p < 0 )
-                                name = ns;
-                            else
-                                name = ns.substr( p + 1 );
-
-                            data.push( new FileData( name, row.get('uid').value, row.get('gid').value, row.get('filecount').value, row.get('ntype').value ));
-                            metadata.push( new FileMetadata( row.get('id').value, row.get('pid').value, 0 ));
-                        }
-                        //else
-                        //    console.log("no");
-
-                    });
-
-                }
+                    processFileRows( results, data, metadata, gids, hidefiles, 0, extras );
 
                 if ( data.length > 0 )
-                    processFileRows( reply, query, data, metadata, gids, max_depth );
+                    processNextDirectory( reply, query, data, metadata, gids, hidefiles, max_depth, extras );
                 else
                     sendReply( reply, {} );
             }
         });
     }
 };
-
-
-function FileData( name, uid, gid, filecount, isfile )
-{
-    this.name       = name;
-    this.uid        = uid;
-    this.gid        = gid;
-    this.filecount  = filecount;
-    this.isfile     = isfile;
-}
 
 
 function FileMetadata( id, pid, depth )
@@ -376,14 +348,56 @@ function FileMetadata( id, pid, depth )
     this.processed  = 0;
 }
 
-function processFileRows( reply, query, data, metadata, gids, max_depth )
+
+function processFileRows( results, data, metadata, gids, hidefiles, depth, extras )
+{
+    var ns;
+    var p;
+    var name = "";
+    var gid = 0;
+    var isfile = false;
+
+    results.forEach( function( row )
+    {
+        gid = row.get('gid').value;
+        isfile = row.get('ntype').value;
+
+        // For now, filter gid on server side (cassandra doesn't allow OR in where clause)
+        if ( gids.indexOf( gid ) > -1 && ( hidefiles === false || isfile === false ))
+        {
+            ns = row.get('namespace').value;
+            p = ns.lastIndexOf("|");
+            if ( p < 0 )
+                name = ns;
+            else
+                name = ns.substr( p + 1 );
+
+            var data_rec = {};
+            data_rec.name       = name;
+            data_rec.uid        = row.get('uid').value;
+            data_rec.gid        = gid;
+            data_rec.filecount  = row.get('filecount').value;
+            data_rec.isfile     = isfile;
+
+            extras.forEach( function( field )
+            {
+                data_rec[field] = row.get(field).value;
+            });
+
+            data.push( data_rec );
+            metadata.push( new FileMetadata( row.get('id').value, row.get('pid').value, depth ));
+        }
+    });
+}
+
+
+function processNextDirectory( reply, query, data, metadata, gids, hidefiles, max_depth, extras )
 {
     var index = -1;
 
     // Find next entry that needs to be followed
     for ( var i = 0; i < metadata.length; ++i )
     {
-//console.log( "  idx: " + i + ", proc: " + metadata[i].processed );
         if ( metadata[i].processed === 0 )
         {
             if ( metadata[i].depth < max_depth ) // AND it's a directory (can't tell yet)
@@ -393,29 +407,21 @@ function processFileRows( reply, query, data, metadata, gids, max_depth )
             }
             else
             {
-//console.log( "  skip, depth: " + metadata[i].depth );
                 metadata[i].processed = 1;
             }
         }
     }
 
-//console.log("MD Len: " + metadata.length + ", index: " + index );
-
     if ( index < 0 )
     {
         // All rows have been processed, send results
-
         buildFileObject( data[0], 0, data, metadata );
-
         sendReply( reply, data[0] );
     }
     else
     {
         var cur_row = metadata[index];
-
         cur_row.processed = 1;
-
-//console.log("ID: " + cur_row.id );
 
         // Query db for next directory
         pool.cql( "select * from spiderfs where pid = " + cur_row.id, [], function( err, results )
@@ -426,29 +432,10 @@ function processFileRows( reply, query, data, metadata, gids, max_depth )
             }
             else
             {
-                var ns;
-                var p;
-                var name = "";
-
-                results.forEach( function( row )
-                {
-                    if ( gids.indexOf( row.get('gid').value ) > -1 )
-                    {
-                        ns = row.get('namespace').value;
-                        p = ns.lastIndexOf("|");
-                        if ( p < 0 )
-                            name = ns;
-                        else
-                            name = ns.substr( p + 1 );
-
-                        data.push( new FileData( name, row.get('uid').value, row.get('gid').value, row.get('filecount').value, row.get('ntype').value ));
-                        metadata.push( new FileMetadata( row.get('id').value, row.get('pid').value, cur_row.depth + 1 ));
-                    }
-                });
+                processFileRows( results, data, metadata, gids, hidefiles, cur_row.depth + 1, extras );
 
                 // Find next row to process
-
-                processFileRows( reply, query, data, metadata, gids, max_depth );
+                processNextDirectory( reply, query, data, metadata, gids, hidefiles, max_depth, extras );
             }
         });
     }
