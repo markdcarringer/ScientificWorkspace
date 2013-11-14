@@ -110,7 +110,7 @@ function handleAppRequest( method, path, query, payload, reply )
         }
         else if ( path.length === 3 )
         {
-            result = gDB.appGet( reply, path[2], query );
+            gDB.appGet( reply, path[2], query );
         }
         else throw ERR_INVALID_REQUEST;
     }
@@ -119,59 +119,24 @@ function handleAppRequest( method, path, query, payload, reply )
 
 
 //=============================================================================
-// FILES and DIRECTORIES Service Functions
-
-/* Provides directory listing API */
-
-function handleDirectoryRequest( method, path, query, payload, reply )
-{
-    // API:
-    // GET host/directories
-
-    var result = "";
-
-    if ( method === "GET" )
-    {
-        if ( path.length === 2 )
-        {
-            result = gDB.directoriesGet( reply, query );
-        }
-        else
-            throw ERR_INVALID_REQUEST;
-    }
-    else
-        throw ERR_INVALID_REQUEST;
-
-    res.writeHead(200);
-    res.write( result );
-    res.end();
-}
-
-
-/* Provides file listing API */
+// FILES (and directories) Service Functions
 
 function handleFileRequest( method, path, query, payload, reply )
 {
     // API:
     // GET host/files
 
-    var result = "";
-
     if ( method === "GET" )
     {
         if ( path.length === 2 )
         {
-            result = gDB.filesGet( reply, query );
+            gDB.filesGet( reply, query );
         }
         else
             throw ERR_INVALID_REQUEST;
     }
     else
         throw ERR_INVALID_REQUEST;
-
-    res.writeHead(200);
-    res.write( result );
-    res.end();
 }
 
 
@@ -263,9 +228,6 @@ function dispatchRequest( method, path, query, payload, reply )
             break;
         case "apps":
             handleAppRequest( method, path, query, payload, reply );
-            break;
-        case "directories":
-            handleDirectoryRequest( method, path, query, payload, reply );
             break;
         case "files":
             handleFileRequest( method, path, query, payload, reply );
