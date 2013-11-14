@@ -132,13 +132,21 @@ function handleFileRequest( method, path, query, payload, reply )
         {
             gDB.filesGet( reply, query );
         }
+        else if ( path.length === 3 )
+        {
+            if ( path[2] === 'start' )
+                gDB.filesStart( reply, query );
+            else if ( path[2] === 'next' )
+                gDB.filesNext( reply, query );
+            else
+                throw ERR_INVALID_REQUEST;
+        }
         else
             throw ERR_INVALID_REQUEST;
     }
     else
         throw ERR_INVALID_REQUEST;
 }
-
 
 
 //=============================================================================
@@ -244,7 +252,7 @@ function dispatchRequest( method, path, query, payload, reply )
         if ( method === "GET" )
         {
             reply.writeHead(200);
-            reply.write('{"resources":["users","groups","jobs","apps","directories","files"]}');
+            reply.write('{"resources":["users","groups","jobs","apps","files","files2"]}');
             reply.end();
         }
         else throw ERR_INVALID_REQUEST;

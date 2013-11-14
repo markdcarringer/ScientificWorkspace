@@ -288,7 +288,7 @@ module.exports =
     filesGet : function ( reply, query )
     {
         // Enforce required query parameter(s)
-        if ( query.path === undefined || query.gid === undefined )
+        if ( query.path === undefined || ( query.gid === undefined && query.uid === undefined ))
             throw ERR_MISSING_REQUIRE_PARAM;
 
         var max_depth = 1;
@@ -299,19 +299,32 @@ module.exports =
         if ( query.hidefiles === "true" || query.hidefiles === "1" )
             hidefiles = true;
 
-        // Build GIF object for in-memory filtering of results
+        var tmp;
+        var i;
+        var gids = undefined;
+        var uid = undefined;
+
+        // Get UID for in-memory filtering of results
         // Must convert the string values to integer values for subsequent comparison to row values
-        var tmp = query.gid.split(',');
-        var gids = [];
-        for ( var i = 0; i < tmp.length; ++i )
-            gids.push( parseInt( tmp[i] ));
+        if ( query.uid !== undefined )
+            uid = parseInt( query.uid );
+
+        // Build GID array for in-memory filtering of results
+        // Must convert the string values to integer values for subsequent comparison to row values
+        if ( query.gid !== undefined )
+        {
+            gids = [];
+            tmp = query.gid.split(',');
+            for ( i = 0; i < tmp.length; ++i )
+                gids.push( parseInt( tmp[i] ));
+        }
 
         // Built extra fields to return from file system table
         var extras = [];
         if ( query.retrieve !== undefined )
         {
             tmp = query.retrieve.split(',');
-            for ( var i = 0; i < tmp.length; ++i )
+            for ( i = 0; i < tmp.length; ++i )
                 extras.push( tmp[i] );
         }
 
@@ -328,10 +341,123 @@ module.exports =
                 var metadata = [];
 
                 if ( results.length > 0 )
-                    processFileRows( results, data, metadata, gids, hidefiles, 0, extras );
+                    processFileRows( results, data, metadata, uid, gids, hidefiles, 0, extras );
 
                 if ( data.length > 0 )
-                    processNextDirectory( reply, query, data, metadata, gids, hidefiles, max_depth, extras );
+                    processNextDirectory( reply, query, data, metadata, uid, gids, hidefiles, max_depth, extras );
+                else
+                    sendReply( reply, {} );
+            }
+        });
+    },
+
+    filesStart : function ( reply, query )
+    {
+        // Enforce required query parameter(s)
+        if ( query.path === undefined )
+            throw ERR_MISSING_REQUIRE_PARAM;
+
+        // Find starting point using provided path
+        pool.cql( "select * from spiderfs where namespace = '" + query.path + "'", [], function( err, results )
+        {
+            if ( err )
+            {
+                sendError( reply, err );
+            }
+            else
+            {
+                if ( results.length > 0 )
+                {
+                    var row = results[0];
+                    if ( row.get('ntype').value === false )
+                    {
+                        var record = {};
+                        record.uid          = row.get('uid').value;
+                        record.gid          = row.get('gid').value;
+                        record.id           = row.get('id').value;
+                        record.filecount    = row.get('filecount').value;
+                        record.size         = row.get('size').value;
+
+                        sendReply( reply, record );
+                    }
+                }
+
+                sendReply( reply, {} );
+            }
+        });
+    },
+
+    filesNext : function ( reply, query )
+    {
+        // Enforce required query parameter(s)
+        if ( query.id === undefined )
+            throw ERR_MISSING_REQUIRE_PARAM;
+
+        var qry = "select * from spiderfs where pid = " + query.id;
+
+        if ( query.last !== undefined )
+            qry += " and token(namespace) > token('" + query.last + "')";
+
+        if ( query.limit !== undefined )
+            qry += " limit " + query.limit;
+
+        // Built extra fields to return from file system table
+        var extras = [];
+        if ( query.retrieve !== undefined )
+        {
+            tmp = query.retrieve.split(',');
+            for ( i = 0; i < tmp.length; ++i )
+                extras.push( tmp[i] );
+        }
+
+        // Find starting point using provided path
+        pool.cql( qry, [], function( err, results )
+        {
+            if ( err )
+            {
+                sendError( reply, err );
+            }
+            else
+            {
+                var data = [];
+                var ns;
+
+                if ( results.length > 0 )
+                {
+                    var p = 0;
+                    var name = "";
+
+                    results.forEach( function( row )
+                    {
+                        ns = row.get('namespace').value;
+
+                        // Only need to do this once b/c base path is same for all rows
+                        if ( p === 0 )
+                            p = ns.lastIndexOf("|");
+
+                        if ( p < 0 )
+                            name = ns;
+                        else
+                            name = ns.substr( p + 1 );
+
+                        var data_rec = {};
+                        data_rec.name       = name;
+                        data_rec.uid        = row.get('uid').value;
+                        data_rec.gid        = row.get('gid').value;
+                        data_rec.filecount  = row.get('filecount').value;
+                        data_rec.isfile     = row.get('ntype').value;
+
+                        extras.forEach( function( field )
+                        {
+                            data_rec[field] = row.get(field).value;
+                        });
+
+                        data.push( data_rec );
+                    });
+                }
+
+                if ( data.length > 0 )
+                    sendReply( reply, { files: data, last: ns } );
                 else
                     sendReply( reply, {} );
             }
@@ -349,24 +475,40 @@ function FileMetadata( id, pid, depth )
 }
 
 
-function processFileRows( results, data, metadata, gids, hidefiles, depth, extras )
+function processFileRows( a_results, a_data, a_metadata, a_uid, a_gids, a_hidefiles, a_depth, a_extras )
 {
     var ns;
-    var p;
+    var p = 0;
     var name = "";
     var gid = 0;
+    var uid = 0;
     var isfile = false;
+    var access = false;
 
-    results.forEach( function( row )
+    a_results.forEach( function( row )
     {
+        uid = row.get('uid').value;
         gid = row.get('gid').value;
         isfile = row.get('ntype').value;
 
+        if ( a_uid === 0 || a_gids === 0 ) // Root access
+            access = true;
+        else if ( a_uid === uid )
+            access = true;
+        else if ( a_gids !== undefined && a_gids.indexOf( gid ) > -1 )
+            access = true;
+        else
+            access = false;
+
         // For now, filter gid on server side (cassandra doesn't allow OR in where clause)
-        if ( gids.indexOf( gid ) > -1 && ( hidefiles === false || isfile === false ))
+        if ( access && ( a_hidefiles === false || isfile === false ))
         {
             ns = row.get('namespace').value;
-            p = ns.lastIndexOf("|");
+
+            // Only need to do this once b/c base path is same for all rows
+            if ( p === 0 )
+                p = ns.lastIndexOf("|");
+
             if ( p < 0 )
                 name = ns;
             else
@@ -374,24 +516,24 @@ function processFileRows( results, data, metadata, gids, hidefiles, depth, extra
 
             var data_rec = {};
             data_rec.name       = name;
-            data_rec.uid        = row.get('uid').value;
+            data_rec.uid        = uid;
             data_rec.gid        = gid;
             data_rec.filecount  = row.get('filecount').value;
             data_rec.isfile     = isfile;
 
-            extras.forEach( function( field )
+            a_extras.forEach( function( field )
             {
                 data_rec[field] = row.get(field).value;
             });
 
-            data.push( data_rec );
-            metadata.push( new FileMetadata( row.get('id').value, row.get('pid').value, depth ));
+            a_data.push( data_rec );
+            a_metadata.push( new FileMetadata( row.get('id').value, row.get('pid').value, a_depth ));
         }
     });
 }
 
 
-function processNextDirectory( reply, query, data, metadata, gids, hidefiles, max_depth, extras )
+function processNextDirectory( reply, query, data, metadata, uid, gids, hidefiles, max_depth, extras )
 {
     var index = -1;
 
@@ -400,15 +542,13 @@ function processNextDirectory( reply, query, data, metadata, gids, hidefiles, ma
     {
         if ( metadata[i].processed === 0 )
         {
-            if ( metadata[i].depth < max_depth ) // AND it's a directory (can't tell yet)
+            if ( metadata[i].depth < max_depth && data[i].isfile === false )
             {
                 index = i;
                 break;
             }
             else
-            {
                 metadata[i].processed = 1;
-            }
         }
     }
 
@@ -432,10 +572,10 @@ function processNextDirectory( reply, query, data, metadata, gids, hidefiles, ma
             }
             else
             {
-                processFileRows( results, data, metadata, gids, hidefiles, cur_row.depth + 1, extras );
+                processFileRows( results, data, metadata, uid, gids, hidefiles, cur_row.depth + 1, extras );
 
                 // Find next row to process
-                processNextDirectory( reply, query, data, metadata, gids, hidefiles, max_depth, extras );
+                processNextDirectory( reply, query, data, metadata, uid, gids, hidefiles, max_depth, extras );
             }
         });
     }
@@ -458,6 +598,7 @@ function buildFileObject( object, obj_idx, data, metadata )
         }
     }
 }
+
 
 
 function parseColumns( query )
@@ -563,6 +704,7 @@ function parseWhereClause( query )
     else
         return "";
 }
+
 
 
 function sendReply( reply, wrapper )
