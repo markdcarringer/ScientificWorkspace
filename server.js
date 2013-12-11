@@ -27,10 +27,12 @@ function handleUserRequest( method, path, query, payload, result )
     {
         if ( path.length === 2 )
         {
+        	console.log('result: ' + result + ' query: ' + query);
             gDB.userQuery( result, query );
         }
         else if ( path.length === 3 )
         {
+        	console.log('result: ' + result + ' path[2]: ' + path[2] + ' query: ' + query);
             gDB.userGet( result, path[2], query );
         }
         else
@@ -128,8 +130,10 @@ function handleFileRequest( method, path, query, payload, reply )
 
     if ( method === "GET" )
     {
+    	console.log('in server.js get for files');
         if ( path.length === 2 )
         {
+        	console.log('reply: ' + reply + ' query: ' + query);
             gDB.filesGet( reply, query );
         }
         else

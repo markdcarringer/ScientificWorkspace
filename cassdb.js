@@ -28,6 +28,7 @@ module.exports =
     {
         var columns = parseColumns( query );
 
+    	console.log("IN User Get Quuery");
         pool.cql( "select " + columns + " from users where username = ?", [a_username], function( err, results )
         {
             if ( err )
@@ -53,9 +54,10 @@ module.exports =
 
     userQuery : function ( reply, query )
     {
+    	console.log("IN User Quuery");
         var where_clause = parseWhereClause( query );
         var columns = parseColumns( query );
-
+        console.log("QUERY..." + "select " + columns + " from users" + where_clause);
         pool.cql( "select " + columns + " from users" + where_clause, [], function( err, results )
         {
             if ( err )
@@ -287,6 +289,15 @@ module.exports =
 
     filesGet : function ( reply, query )
     {
+    	console.log('in filesGet');
+    	
+    	for(var key in reply) {
+    		//console.log('reply key: ' + key);
+    	}
+    	for (var key in query) {
+    		//console.log('query key: ' + key);
+    	}
+    	
         // Enforce required query parameter(s)
         if ( query.path === undefined || query.gid === undefined )
             throw ERR_MISSING_REQUIRE_PARAM;
@@ -295,6 +306,7 @@ module.exports =
         if ( query.depth !== undefined )
             max_depth = query.depth;
 
+        
         // Build GIF object for in-memory filtering of results
         // Must convert the string values to integer values for subsequent comparison to row values
         var tmp = query.gid.split(',');
@@ -305,16 +317,19 @@ module.exports =
         }
 
 //console.log( "MD: " + max_depth );
-
+        console.log("select * from spiderfs where namespace = '" + query.path + "'")
         // Find starting point using provided path
         pool.cql( "select * from spiderfs where namespace = '" + query.path + "'", [], function( err, results )
         {
+        	console.log('in cassandra callback');
             if ( err )
             {
                 sendError( reply, err );
             }
             else
             {
+
+            	console.log('\tno error so far');
                 var data = [];
                 var metadata = [];
 
@@ -348,12 +363,20 @@ module.exports =
 
                 }
 
-                if ( data.length > 0 )
-                    processFileRows( reply, query, data, metadata, gids, max_depth );
+            	console.log('\tat sending reply step');
+                if ( data.length > 0 ) {
+                	processFileRows( reply, query, data, metadata, gids, max_depth );
+                	console.log('\tat end of process rows');
+                }
+                    
                 else
                     sendReply( reply, {} );
             }
+            console.log('end cassandra callback');
         });
+        
+
+    	console.log('end filesGet');
     }
 };
 
@@ -401,6 +424,7 @@ function processFileRows( reply, query, data, metadata, gids, max_depth )
 
 //console.log("MD Len: " + metadata.length + ", index: " + index );
 
+    console.log('\t\tin process file rows')
     if ( index < 0 )
     {
         // All rows have been processed, send results
@@ -452,6 +476,8 @@ function processFileRows( reply, query, data, metadata, gids, max_depth )
             }
         });
     }
+
+    console.log('\t\tend process file rows')
 }
 
 
@@ -580,6 +606,8 @@ function parseWhereClause( query )
 
 function sendReply( reply, wrapper )
 {
+	console.log('in send reply...');
+	console.log(JSON.stringify( wrapper, null, 2 ));
     reply.writeHead(200);
     reply.write( JSON.stringify( wrapper, null, 2 ));
     reply.end();
