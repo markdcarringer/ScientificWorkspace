@@ -14,7 +14,8 @@ $(function(){
 
 function initiateFileTree(mvcURL,user_id) {
 	
-	console.log('initiateFileTree');
+	console.log('initiateFileTree with mvcURL: ' + mvcURL);
+
 	
 	// --- Initialize sample trees
     $("#files_tree").dynatree({
@@ -33,9 +34,9 @@ function initiateFileTree(mvcURL,user_id) {
       onLazyRead: function(node){
 
 	    	 
-    	  var url = mvcURL + "/filesinfo?path=" + node.data.path + '&uid=8038&gid=16854';
+    	  //var url = mvcURL + "/filesinfo?path=" + node.data.path + '&uid=8038&gid=16854';
     	  
-    	  getFileInfo(url);
+    	  //getFileInfo(url);
     	  
     	  
           node.appendAjax({
@@ -56,18 +57,22 @@ function getFileInfo(url) {
 	
 	var infoDIV = '#file_info';
 	  
+	console.log('calling url: ' + url);
+	
 	  //ajax call for file info
 	  jQuery.ajax({
 		  url: url,
 		  type: 'GET',
 		  success: function(data) {
 
+			  console.log('success in getting data');
+			  
 	    	$(infoDIV).empty();
 	    	
 	    	data = JSON.parse(data);
 	    	
 			for(var key in data) {
-				//console.log('key: ' + key + ' data: ' + data[key]);
+				console.log('key: ' + key + ' data: ' + data[key]);
 				if(key == 'files') {
 					var filesStr = '<div><span style="font-weight:bold;">' + key + '</span> - ';
 					var fileObjs = data[key];

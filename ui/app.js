@@ -1,7 +1,7 @@
 var express = require('express');
 var app = express();
 
-var firewallMode = true;
+var firewallMode = false;
 
 var hbs = require('hbs');
 
@@ -13,12 +13,47 @@ app.use(express.static('public'));
 
 var servicePort = 8080;
 
-//main page
-app.get('/',function(req,res) {
-  res.sendfile('./views/charisma/index.html');
+app.get('/sciworkspace',function(req,res) {
+	//res.sendfile('./views/charisma/index.html');
+	res.render('./views/charisma/index.html',{a : 'a'});
 });
 
+//main page
+//app.get('/sciworkspace/:user_id',function(req,res) {
+app.get('/',function(req,res) {
+		
+//if()
+
+	
+	if(req.params.user_id == undefined) {
+		console.log('No user given...use default');
+	} else {
+		console.log('User is ' + req.params.user_id);
+	}
+	
+	
+	/*
+	console.log('params: ' + request.params.job_id);
+	  
+	var options = {
+			host: 'localhost',
+			port: servicePort,
+			path: '/jobs/'+request.params.job_id,
+			method: 'GET'
+	};
+	*/
+	
+	
+	
+	
+    res.sendfile('./views/charisma/index.html');
+});
+
+
+
+
 var files = require('./proxy/files.js');
+
 
 var jobs = require('./proxy/jobs.js');
 
@@ -489,7 +524,7 @@ app.get('/jobsinfo',function(request,response) {
 	var isJob = false;
 	
 	for(var key in query) {
-		console.log('jobsinfo key: ' + key + ' value: ' + query[key]);
+		//console.log('jobsinfo key: ' + key + ' value: ' + query[key]);
 		if(key == 'path') {
 			filePath = query[key];
 		}
@@ -709,16 +744,15 @@ app.get('/initfilesdata',function(request,response) {
 //files proxy service
 app.get('/filesinfo',function(request,response) {
 	
-	console.log ('calling files proxy...');
+	console.log ('calling filesinfo proxy...');
+	
+	//grab the different components of the url
 	var url_parts = url.parse(request.url, true);
 	var query = url_parts.query;
 	
 	var path = '/files?';
 	
-	var filePath = '';
-	
 	for(var key in query) {
-		//console.log('key: ' + key + ' value: ' + query[key]);
 		if(key == 'path') {
 			filePath = query[key];
 		}
@@ -746,17 +780,7 @@ app.get('/filesinfo',function(request,response) {
 			  res.on('data', function (chunk) {
 				  console.log('\n\n\n\nchunk: ' + chunk);
 				  responseData += chunk;	
-				  
-				  
-				  // you can use res.send instead of console.log to output via express
-				  
-			     
-		    	  //construct the respText array
-		    	  //var a = '{"title": "SubItem 1", "isLazy": true }';
-		    	  
-		    	  //jsonStr = '[{ "title" : "ChromaBuilds1",  "isLazy" : true ,  "isFolder" : true} , { "title" : "ChromaBuilds2",  "isLazy" : true ,  "isFolder" : true}]';
-
-		    	
+					
 			  });
 			  res.on('end',function() {
 				  
@@ -841,7 +865,7 @@ app.get('/files',function(request,response) {
 	var filePath = '';
 	
 	for(var key in query) {
-		//console.log('key: ' + key + ' value: ' + query[key]);
+		console.log('key: ' + key + ' value: ' + query[key]);
 		if(key == 'path') {
 			filePath = query[key];
 		}
@@ -864,7 +888,7 @@ app.get('/files',function(request,response) {
 	 if(firewallMode) {
 		//use hard coded values
 		 
-		 console.log('firewall mode on in file');
+		 console.log('\n\nfirewall mode for file --> off\n\n')
 		 
 		 var fileResponseJSONStr = '{ ' + 
 			'"name" : "lgt006" , ' +
@@ -904,6 +928,9 @@ app.get('/files',function(request,response) {
 	 } 
 	 //call the service for the data
 	 else {
+		 
+		 console.log('\n\nfirewall mode for file --> off\n\n')
+		 
 		 var req = http.request(options, function(res) {
 			  //console.log("Got response: " + res.statusCode);
 			  //console.log('HEADERS: ' + JSON.stringify(res.headers));
@@ -925,8 +952,12 @@ app.get('/files',function(request,response) {
 			  });
 			  res.on('end',function() {
 				 
-
-				  var jsonStr = doQueryFiles(responseData,filePath);
+				  /*
+				  for(var key in files) {
+						console.log('key: ' + key + ' value: ' + files[key]);
+					}
+					*/
+				  var jsonStr = files.doQueryFiles(responseData,filePath);
 		    	  
 				  console.log('ending...');
 		    	  
@@ -967,6 +998,41 @@ app.get('/files',function(request,response) {
 
 
 app.listen(3000);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1033,247 +1099,6 @@ app.get('/jobs/:job_id',function(request,response) {
   
 });
 */
-
-
-
-
-
-/*
-//jobs proxy service
-app.get('/files',function(request,response) {
-  var options = {
-	host: 'localhost',
-	port: servicePort,
-	path: '/files',
-	method: 'GET'
-  };
-	  
-  var responseData = '';
-	  
-  if(firewallMode) {
-	  
-  } else {
-	  var req = http.request(options, function(res) {
-		    console.log('STATUS: ' + res.statusCode);
-			res.setEncoding('utf8');
-			res.on('data', function (chunk) {
-			  responseData += chunk;	
-		    });
-			     
-		    res.on("end", function () {
-		    // you can use res.send instead of console.log to output via express
-		    	var jsonObj = JSON.parse(responseData);
-		        response.send(jsonObj);
-		    }); 
-			     
-			      
-		  });
-			  
-		  req.on('error', function(e) {
-		    console.log('problem with request: ' + e.message);
-		  });
-			  
-		  // write data to request body
-		  req.write('data\n');
-		  req.write('data\n');
-		  req.end();
-  }
-  
-});
-*/
-
-
-
-
-
-
-
-/*
-//users proxy service
-app.get('/users/:user_id',function(request,response) {
-  
-  console.log('params: ' + request.params.user_id);
-  
-  
-  
-  var options = {
-    host: 'localhost',
-    port: servicePort,
-    path: '/users/'+request.params.user_id,
-    method: 'GET'
-  };
-  
-  var responseData = '';
-  
-  if(firewallMode) {
-	  responseData = '{ "user_id" : "user_id1" , "firstname" : "aaa" , "lastname" : "bbb" }';
-	  var jsonObj = JSON.parse(responseData);
-	  response.send(jsonObj);
-  } else { 
-	  
-	  // take out for now
-	  //var req = http.request(options, function(res) {
-	  //  console.log('STATUS: ' + res.statusCode);
-	  //  res.setEncoding('utf8');
-	  //  res.on('data', function (chunk) {
-	    
-	  //    responseData += chunk;
-
-	  //  });
-	     
-	    
-	  //  res.on("end", function () {
-	  //      // you can use res.send instead of console.log to output via express
-	  //  	var jsonObj = JSON.parse(responseData);
-	  //      response.send(jsonObj);
-	  //  }); 
-	     
-	      
-	  //});
-	  
-	  //req.on('error', function(e) {
-	  //  console.log('problem with request: ' + e.message);
-	  //});
-	  
-	  //// write data to request body
-	  //req.write('data\n');
-	  //req.write('data\n');
-	  //req.end();
-	  //
-	  
-  }
-  
-  
-  
-  var jsonObj = JSON.parse(responseData);
-  response.send(jsonObj);
-  
-  
- 
-});
-*/
-
-
-
-/*
-//directories proxy service
-app.get('/directories',function(request,response) {
-  var options = {
-	host: 'localhost',
-	port: servicePort,
-	path: '/directories',
-	method: 'GET'
-  };
-	  
-  var responseData = '';
-	  
-  if(firewallMode) {
-	  
-	  var jsonObj = JSON.parse(responseData);
-	  response.send(jsonObj);
-  } else {
-	  
-	  //
-	  //var req = http.request(options, function(res) {
-	//	    console.log('STATUS: ' + res.statusCode);
-	//		res.setEncoding('utf8');
-	//		res.on('data', function (chunk) {
-	//		  responseData += chunk;	
-	//	    });
-	//		     
-	//	    res.on("end", function () {
-	//	    // you can use res.send instead of console.log to output via express
-	//	      response.send(responseData);
-	//	    }); 
-	//		     
-	//		      
-	//	  });
-	//		  
-	//	  req.on('error', function(e) {
-	//	    console.log('problem with request: ' + e.message);
-	//	  });
-	//		  
-	//	  // write data to request body
-	//	  req.write('data\n');
-	//	  req.write('data\n');
-	//	  req.end();
-	//  
-  }
-  
-  
-});
-*/
-
-
-
-
-
-
-
-/*
-//jobs proxy service
-app.get('/apps/:app_id',function(request,response) {
-  console.log('params: ' + request.params.app_id);
-	  
-  var options = {
-    host: 'localhost',
-	port: servicePort,
-	path: '/apps/'+request.params.app_id,
-	method: 'GET'
-  };
-	  
-  var responseData = '';
-	
-  if(firewallMode) {
-	  
-	  if(request.params.job_id == 'app1') {
-		  responseData = '{ "app_id" : "app1" , "properties" : [ "propertyA" : "A" ] }';
-	  } else if (request.params.job_id == 'app3') { 
-		  responseData = '{ "app_id" : "app3" , "properties" : [ "propertyC" : "C" ] }';
-	  } else {
-		  responseData = '{ "app_id" : ' + request.params.job_id +  ' , "properties" : [ "propertyDDDD" : "DDDD" ] }';
-	  }
-  
-	  var jsonObj = JSON.parse(responseData);
-	  response.send(jsonObj);
-  } else {
-	  
-  //
-  //var req = http.request(options, function(res) {
-  //  console.log('STATUS: ' + res.statusCode);
-//	res.setEncoding('utf8');
-//	res.on('data', function (chunk) {
-//	  responseData += chunk;	
- //   });
-	     
-   // res.on("end", function () {
-    //// you can use res.send instead of console.log to output via express
-    //	var jsonObj = JSON.parse(responseData);
-     //   response.send(jsonObj);
-    //}); 
-	     
-	      
-//  });
-	  
-//  req.on('error', function(e) {
-//    console.log('problem with request: ' + e.message);
-//  });
-	  
-//  // write data to request body
-//  req.write('data\n');
-//  req.write('data\n');
-//  req.end();
-// 
-	  
-//  }
-
-  
-  
-  
-});
-
-*/
-
 
 
 

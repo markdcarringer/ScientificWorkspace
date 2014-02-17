@@ -40,12 +40,10 @@
 	      title: "Lazy loading sample",
 	      fx: { height: "toggle", duration: 200 },
 	      autoFocus: false, // Set focus to first child, when expanding or lazy-loading.
-	      // In real life we would call a URL on the server like this:
 //	          initAjax: {
 //	              url: "/getTopLevelNodesAsJson",
 //	              data: { mode: "funnyMode" }
 //	              },
-	      // .. but here we use a local file instead:
 	      initAjax: {
 	        url: mvcURL + "/initjobsdata"
 	        },
@@ -55,16 +53,9 @@
 	      },
 
 	      onLazyRead: function(node){
-	    	 alert(node.data.title + ' ' + node.data.type);
+	    	 console.log('jobs lazy read --> ' + node.data.title + ' ' + node.data.type);
 	    	 var job_id = 'Boltzmann2D3D (1723340)';
-	        // In real life we would call something like this:
-//	              node.appendAjax({
-//	                  url: "/getChildrenAsJson",
-//	                data: {key: node.data.key,
-//	                       mode: "funnyMode"
-//	                         }
-//	              });
-	        // .. but here we use a local file instead:
+	       
 	    	 
 	    	var url = mvcURL + "/jobsinfo?path=" + node.data.path + '&uid=8038&gid=16854&job_id='+job_id+'&type='+node.data.type;
 	    	  
