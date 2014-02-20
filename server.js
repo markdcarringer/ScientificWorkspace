@@ -137,31 +137,34 @@ function handleFileRequest( method, path, query, payload, reply )
 function handleAssociationRequest( method, path, query, payload, reply )
 {
     // API:
-    // GET associations/uuid
+    // GET /host/associations?edge=(uuid)
+    // GET /host/associations?node=(uuid)
+    // PUT /host/associations?edge=(uuid)&node=(uuid)&type=x
+    // DEL /host/associations?edge=(uuid)&node=(uuid)
 
     if ( method === "GET" )
     {
-        if ( path.length === 3 )
+        if ( path.length === 2 )
         {
-            DB.associationsGet( reply, path[2], query );
+            DB.associationsGet( reply, query );
         }
         else
             throw Err.INVALID_REQUEST;
     }
     else if ( method === "PUT" )
     {
-        if ( path.length === 3 )
+        if ( path.length === 2 )
         {
-            DB.associationsPut( reply, path[2], query );
+            DB.associationsPut( reply, query );
         }
         else
             throw Err.INVALID_REQUEST;
     }
     else if ( method === "DELETE" )
     {
-        if ( path.length === 3 )
+        if ( path.length === 2 )
         {
-            DB.associationsDelete( reply, path[2], query );
+            DB.associationsDelete( reply, query );
         }
         else
             throw Err.INVALID_REQUEST;

@@ -21,6 +21,24 @@ pool.connect( function( err, keyspace )
         console.error( err, keyspace );
     });
 
+var tableByType = { "file":"spiderfs","user":"users","group":"groups","job":"jobs","app":"apps","tag":"tags"};
+
+/* Note about Error Handling: Most of the exported database API function below
+are called with an expectation that exceptions can be thrown; however, since
+delegate functions are used to receieve data asynchronously from CQL calls to
+helenus, exceptions can not be thrown in those contexts. Within these
+delegates, errors must be processed by using the "sendError" funciton of the
+error module (Err object in the code below) which generates an appropriate
+reply to the client based on the specified error code.
+
+Unfortunately, helenus converts exceptions into plain strings that are passed
+to these delegates which prevents any meaningful handling or translations of
+the underlying cause of the error. So, all helenus exceptions are treated as
+if the client specified invalid query parameters in terms of the server reply
+code (i.e. 400). The exception text provided by helenus is also returned as a
+payload in the server reply to the client.
+*/
+
 module.exports =
 {
     //===== USERS API =========================================================
@@ -375,117 +393,234 @@ module.exports =
         });
     },
 
-    // Creates a new tag with specified name and properties (in query)
-    // If tag is created, call responds with newly created tag info in payload
-    // If tag already exists, call fails with
+    // Creates or updates a tag with specified name and properties (in query)
+    // If tag is created/updated, call responds with newly created tag info in payload
     tagPut : function ( reply, a_tagname, query )
     {
         // Enforce required query parameter(s)
-        if ( query.uid === undefined || query.visibility === undefined )
+        if ( query.uid === undefined )
            throw Err.MISSING_REQUIRED_PARAM;
 
-        pool.cql( "insert into tags (tagid,tagdesc,tagname,uid,visibility,wtime) values (now(),'" + ((query.desc === undefined) ? "" : query.desc) + "','" + a_tagname + "'," + query.uid + ",'" + query.visibility + "',dateof(now()))", [], function( err, results )
+        tagExistsByName( a_tagname, query.uid, function( tag_exists, a_tag_uuid )
         {
-            if ( err )
-                Err.sendError( reply, err );
+            var qry;
+            if ( tag_exists )
+                qry = "update tags set tagdesc = '"  + ((query.desc === undefined) ? "" : query.desc) + "', visibility = '"
+                      + ((query.visibility === undefined) ? "private" : query.visibility)
+                      + "', wtime = dateof(now()) where uuid = " + a_tag_uuid;
             else
+                qry = "insert into tags (uuid,tagdesc,tagname,uid,visibility,wtime) values (now(),'"
+                      + ((query.desc === undefined) ? "" : query.desc) + "','" + a_tagname + "'," + query.uid + ",'"
+                      + ((query.visibility === undefined) ? "private" : query.visibility) + "',dateof(now()))";
+
+            pool.cql( qry, [], function( err, results )
             {
-                var subquery = {};
-                subquery.uid = query.uid;
-                tagGet( reply, a_tagname, subquery );
-                //sendReply( reply, "" );
-            }
+                if ( err )
+                    Err.sendError( reply, err );
+                else
+                {
+                    var subquery = {};
+                    subquery.uid = query.uid;
+                    module.exports.tagGet( reply, a_tagname, subquery );
+                }
+            });
         });
     },
 
     // Deletes based on Tag UUID
-    // If tag exists it will be deleted, no payload in server reponse
-    // If tag does not exist, call will succeed but no action will be taken (no payload)
-    // If tag is malformed, call will fail with exception info in payload
     tagDelete : function ( reply, a_taguuid, query )
     {
-        // Enforce required query parameter(s)
-        // None currently
-
-        pool.cql( "delete from tags where tagid = " + a_taguuid, [], function( err, results )
+        // Check if tag exists and get uuid if it does...
+        objectExists( a_taguuid, "tag", function( obj_exists )
         {
-            if ( err )
-                Err.sendError( reply, err );
+            if ( obj_exists )
+            {
+                // Delete all associations referring to this tag
+                deleteAssociations( a_taguuid, function( error )
+                {
+                    if ( error )
+                        Err.sendError( reply, error );
+                    else
+                    {
+                        // Now delete tag
+                        pool.cql( "delete from tags where uuid = " + a_taguuid, [], function( err, results )
+                        {
+                            if ( err )
+                                Err.sendError( reply, err );
+                            else
+                                sendReply( reply );
+                        });
+                    }
+                });
+            }
             else
-                sendReply( reply, {} );
+                Err.sendError( reply, Err.INVALID_OBJECT );
         });
     },
 
     //===== ASSOCIATIONS API ==================================================
 
-    associationsGet : function ( reply, a_uuid, query )
+    /* Note on Associations and Tags: In this system, Tags are treated as the
+    edges in a graph of object nodes. The association table uses the first column
+    (edgeuuid) to identify the edge (tag) that associates ~one~ or more objects.
+    If the system is eventually expanded to other types of edges, another table
+    must be created to track per-edge type and data. Tag metadata is stored in the
+    tags table.
+    */
+    associationsGet : function ( reply, query )
     {
-        // Enforce required query parameter(s)
-        // None for now
+        // API:
+        // GET /host/associations?edge=(uuid)
+        // GET /host/associations?node=(uuid)
 
-        pool.cql( "select nodeuuid, nodetype from associations where edgeuuid = " + a_uuid + " allow filtering", [], function( err, results )
+        // Enforce required query parameter(s)
+        if ( query.edge === undefined && ( query.node === undefined || query.type === undefined ))
+           throw Err.MISSING_REQUIRED_PARAM;
+
+        if ( query.edge )
         {
-            if ( err )
-                Err.sendError( reply, err );
-            else
+            objectExists( query.edge, "tag", function( tag_exists )
             {
-                var wrapper = {};
-
-                // For now, only TAGS can be first end-point of an association
-                wrapper["uuid"] = a_uuid;
-                wrapper["type"] = "tag";
-
-                var associations = [];
-
-                results.forEach( function( row )
+                if ( tag_exists )
                 {
-                    var record = {};
-                    row.forEach( function( name, value, ts, ttl )
+                    // Return object/type associated with tag
+                    pool.cql( "select nodeuuid, nodetype from associations where edgeuuid = " + query.edge + " allow filtering", [], function( err, results )
                     {
-                        if ( name === "nodeuuid" )
-                            record["uuid"] = value.toString();
+                        if ( err )
+                            Err.sendError( reply, err );
                         else
-                            record["type"] = value;
+                        {
+                            var wrapper = {};
+
+                            wrapper["uuid"] = query.edge;
+                            wrapper["type"] = "tag";
+
+                            var associations = [];
+
+                            results.forEach( function( row )
+                            {
+                                var record = {};
+                                row.forEach( function( name, value, ts, ttl )
+                                {
+                                    if ( name === "nodeuuid" )
+                                        record["uuid"] = value.toString();
+                                    else
+                                        record["type"] = value;
+                                });
+
+                                associations.push( record );
+                            });
+
+                            wrapper["associations"] = associations;
+                            sendReply( reply, wrapper );
+                        }
                     });
+                }
+                else
+                    Err.sendError( reply, Err.INVALID_OBJECT );
+            });
+        }
+        else
+        {
+            objectExists( query.node, query.type, function( node_exists )
+            {
+                if ( node_exists )
+                {
+                    // Return TAGS associated with object/type
+                    pool.cql( "select edgeuuid from associations where nodeuuid = " + query.node + " allow filtering", [], function( err, results )
+                    {
+                        if ( err )
+                            Err.sendError( reply, err );
+                        else
+                        {
+                            var wrapper = {};
 
-                    associations.push( record );
+                            wrapper["uuid"] = query.node;
+                            wrapper["type"] = query.type;
+
+                            var associations = [];
+
+                            results.forEach( function( row )
+                            {
+                                var record = {};
+                                row.forEach( function( name, value, ts, ttl )
+                                {
+                                    record["uuid"] = value.toString();
+                                    record["type"] = "tag";
+                                });
+
+                                associations.push( record );
+                            });
+
+                            wrapper["associations"] = associations;
+                            sendReply( reply, wrapper );
+                        }
+                    });
+                }
+                else
+                    Err.sendError( reply, Err.INVALID_OBJECT );
+            });
+        };
+    },
+
+    // Create a new association between a node and an edge (tag)
+    associationsPut : function ( reply, query )
+    {
+        // API:
+        // PUT /host/associations?edge=(uuid)&node=(uuid)&type=x
+
+        // Enforce required query parameter(s)
+        if ( query.edge === undefined || query.node === undefined || query.type === undefined )
+           throw Err.MISSING_REQUIRED_PARAM;
+
+        objectExists( query.edge, "tag", function( tag_exists )
+        {
+            if ( tag_exists )
+            {
+                objectExists( query.node, query.type, function( obj_exists )
+                {
+                    if ( obj_exists )
+                    {
+                        createAssociation( query.edge, query.node, query.type, function( error )
+                        {
+                            if ( error )
+                                Err.sendError( reply, error );
+                            else
+                                sendReply( reply, "" );
+                        });
+                    }
+                    else
+                        Err.sendError( reply, Err.INVALID_OBJECT );
                 });
-
-                wrapper["associations"] = associations;
-                sendReply( reply, wrapper );
             }
+            else
+                Err.sendError( reply, Err.INVALID_OBJECT );
         });
     },
 
-    associationsPut : function ( reply, a_uuid, query )
+    associationsDelete : function ( reply, query )
     {
+        // API:
+        // DEL /host/associations?edge=(uuid)&node=(uuid)
+
         // Enforce required query parameter(s)
-        if ( query.uuid === undefined || query.type === undefined )
+        if ( query.edge === undefined || query.node === undefined )
            throw Err.MISSING_REQUIRED_PARAM;
 
-        //pool.cql( "insert into associations (edgeuuid,nodeuuid,nodetype) values (" + a_uuid + "," + query.uuid + ",'" + query.type + "')", [], function( err, results )
-        pool.cql( "insert into associations (edgeuuid,nodeuuid,nodetype) values (" + a_uuid + "," + query.uuid + "," + query.type + ")", [], function( err, results )
+        associationExists( query.edge, query.node, function( exists )
         {
-            if ( err )
-                Err.sendError( reply, err );
+            if ( exists )
+            {
+                deleteAssociation( query.edge, query.node, function( error )
+                {
+                    if ( error )
+                        Err.sendError( reply, error );
+                    else
+                        sendReply( reply );
+                });
+            }
             else
-                sendReply( reply, "" );
-        });
-    },
-
-    associationsDelete : function ( reply, a_uuid, query )
-    {
-        // Enforce required query parameter(s)
-        if ( query.uuid === undefined )
-           throw Err.MISSING_REQUIRED_PARAM;
-
-        //pool.cql( "insert into associations (edgeuuid,nodeuuid,nodetype) values (" + a_uuid + "," + query.uuid + ",'" + query.type + "')", [], function( err, results )
-        pool.cql( "delete from associations where edgeuuid = " + a_uuid + " and nodeuuid = " + query.uuid, [], function( err, results )
-        {
-            if ( err )
-                Err.sendError( reply, err );
-            else
-                sendReply( reply, "" );
+                Err.sendError( reply, Err.INVALID_OBJECT );
         });
     },
 
@@ -693,6 +828,66 @@ function buildFileObject( object, obj_idx, data, metadata )
 }
 
 
+/// Checks if an object exists in database by uuid and type
+function objectExists( a_uuid, a_type, callback )
+{
+    pool.cql( "select uuid from " + tableByType[a_type] + " where uuid = " + a_uuid, [], function( err, results )
+    {
+        if ( err || !results.length )
+            callback( 0 );
+        else
+            callback( 1 );
+    });
+}
+
+
+function tagExistsByName( a_tagname, a_uid, callback )
+{
+    pool.cql( "select uuid from tags where tagname = '" + a_tagname + "' and uid = " + a_uid + " allow filtering", [], function( err, results )
+    {
+        if ( !err && results.length )
+            callback( 1, results[0][0].value );
+        else
+            callback( 0, null );
+    });
+}
+
+
+function associationExists( a_edgeuuid, a_nodeuuid, callback )
+{
+    pool.cql( "select edgeuuid from associations where edgeuuid = " + a_edgeuuid + " and nodeuuid = " + a_nodeuuid + " allow filtering", [], function( err, results )
+    {
+        callback( !err && results.length );
+    });
+}
+
+
+// This is a temporary function that will be replaced when arbitrary objects can be associated
+function deleteAssociations( a_edgeuuid, callback )
+{
+    pool.cql( "delete from associations where edgeuuid = " + a_edgeuuid, [], function( err, results )
+    {
+        callback( err );
+    });
+}
+
+function deleteAssociation( a_edgeuuid, a_nodeuuid, callback )
+{
+    pool.cql( "delete from associations where edgeuuid = " + a_edgeuuid + " and nodeuuid = " + a_nodeuuid, [], function( err, results )
+    {
+        callback( err );
+    });
+}
+
+
+function createAssociation( a_edgeuuid, a_nodeuuid, a_nodetype, callback )
+{
+    pool.cql( "insert into associations (edgeuuid,nodeuuid,nodetype) values (" + a_edgeuuid + "," + a_nodeuuid + ",'" + a_nodetype + "')", [], function( err, results )
+    {
+        callback( err );
+    });
+}
+
 
 function parseColumns( query )
 {
@@ -799,10 +994,14 @@ function parseWhereClause( query )
 }
 
 
-function sendReply( reply, wrapper )
+function sendReply( reply, payload )
 {
     reply.writeHead(200);
-    reply.write( JSON.stringify( wrapper, null, 2 ));
+    if ( payload )
+    {
+        reply.write( JSON.stringify( payload, null, 2 ));
+        reply.write( "\n" );
+    }
     reply.end();
 }
 
